@@ -1,0 +1,38 @@
+spring:
+  application:
+    name: apiGateWay
+
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+
+
+      routes:
+        # Route pour ms-livre
+        - id: ms-livre
+          uri: lb://ms-livre
+          predicates:
+            - Path=/api/livre/**
+
+        # Route pour ms-users
+        - id: ms-users
+          uri: lb://ms-users
+          predicates:
+            - Path=/api/users/**
+
+        # Route pour ms-emprunt
+        - id: ms-emprunt
+          uri: lb://ms-emprunt
+          predicates:
+            - Path=/api/emprunts/**
+
+server:
+  port: 8762
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/

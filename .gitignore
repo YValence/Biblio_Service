@@ -1,0 +1,10 @@
+.idea/
+.vscode/
+**/target/
+**/.next/
+**/node_modules/
+*.log
+*.class
+*.jar
+*.war
+.DS_Store
