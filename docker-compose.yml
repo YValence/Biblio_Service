@@ -1,0 +1,145 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: mysql-biblioteque
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: userdb
+    ports:
+      - "3307:3306" # Port externe changé pour éviter conflit avec MySQL local
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    networks:
+      - biblioteque-network
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost", "-prootpassword" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: phpmyadmin-biblioteque
+    restart: always
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306 # Port interne Docker, ne change pas
+      PMA_USER: root
+      PMA_PASSWORD: rootpassword
+    ports:
+      - "8081:80" # Port externe changé (8080 → 8081) au cas où
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - biblioteque-network
+
+  eureka-register:
+    build:
+      context: ./eureka-register
+      dockerfile: Dockerfile
+    container_name: eureka-register
+    restart: always
+    ports:
+      - "8761:8761"
+    networks:
+      - biblioteque-network
+
+  api-gateway:
+    build:
+      context: ./apiGateWay
+      dockerfile: Dockerfile
+    container_name: api-gateway
+    restart: always
+    ports:
+      - "8762:8762"
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-register:8761/eureka/
+    depends_on:
+      - eureka-register
+    networks:
+      - biblioteque-network
+
+  ms-users:
+    build:
+      context: ./ms-users
+      dockerfile: Dockerfile
+    container_name: ms-users
+    restart: always
+    ports:
+      - "8030:8030"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/userdb
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: rootpassword
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-register:8761/eureka/
+    depends_on:
+      - mysql
+      - eureka-register
+    networks:
+      - biblioteque-network
+
+  ms-livre:
+    build:
+      context: ./ms-livre
+      dockerfile: Dockerfile
+    container_name: ms-livre
+    restart: always
+    ports:
+      - "8029:8029"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/livredb
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: rootpassword
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-register:8761/eureka/
+    depends_on:
+      - mysql
+      - eureka-register
+    networks:
+      - biblioteque-network
+
+  ms-emprunt:
+    build:
+      context: ./ms-emprunt
+      dockerfile: Dockerfile
+    container_name: ms-emprunt
+    restart: always
+    ports:
+      - "8031:8031"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/empruntdb
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: rootpassword
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-register:8761/eureka/
+    depends_on:
+      - mysql
+      - eureka-register
+      - ms-users
+      - ms-livre
+    networks:
+      - biblioteque-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: frontend-bibliotheque
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://api-gateway:8762
+    depends_on:
+      - api-gateway
+    networks:
+      - biblioteque-network
+
+volumes:
+  mysql_data:
+    driver: local
+
+networks:
+  biblioteque-network:
+    driver: bridge
